@@ -7,6 +7,7 @@
 #include "path_finder.h"
 #include "cone_of_vision.h"
 
+#include <algorithm>
 #include <vector>
 #include <cmath>
 
