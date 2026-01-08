@@ -17,14 +17,14 @@ namespace NavMesh {
 		Polygon& operator=(Polygon&&);
 		Polygon& operator=(const Polygon&);
 
-		// Adds point to the polygon. 
-		// If it lies inside the polygon or on the side, 
+		// Adds point to the polygon.
+		// If it lies inside the polygon or on the side,
 		// it will be ignored.
 		void AddPoint(const Point& a);
-		void AddPoint(int x, int y);
+		void AddPoint(float x, float y);
 
 		// Checks if |a| is strictly inside the polygon.
-		// Returns false if |a| coincides with some vertex 
+		// Returns false if |a| coincides with some vertex
 		// or lies on the side.
 		bool IsInside(const Point& a) const;
 
@@ -55,7 +55,7 @@ namespace NavMesh {
 		//
 		// Constructs Minkowski sum of the polygon and 2*r x 2*r square centered at 0.
 		// Increases number of points by at most 4.
-		Polygon Inflate(int r) const;
+		Polygon Inflate(float r) const;
 
 		// Returns ids of two points which are endpoints for
 		// two tangents (in different directions).
@@ -71,7 +71,7 @@ namespace NavMesh {
 		// If |a| is on the side, returns two consecutive ids.
 		std::pair<int, int> GetTangentIds(const Point& a) const;
 
-		// Checks if the segment from |a| to i-th point is tangent to 
+		// Checks if the segment from |a| to i-th point is tangent to
 		// this polygon. I.e. i-th point is the leftmost or the rightmost,
 		// if seen from |a|.
 		bool IsTangent(int i, const Point& a) const;
@@ -94,11 +94,11 @@ namespace NavMesh {
 		void OrderCounterClockwiseAndRemoveCollinearPoints();
 
 		// All points x coordinates sorted. Used for fast IsInside algorithm.
-		mutable std::vector<int> xs_;
-		// Coefficients for top and buttom a*x+b*y+c == 0 lines for each vertical segment.
+		mutable std::vector<float> xs_;
+		// Coefficients for top and bottom a*x+b*y+c == 0 lines for each vertical segment.
 		// |b| is always positive.
 		// i-th entry corresponds for lines between x[i]..x[i+1];
-		mutable std::vector<std::pair<std::pair<int, int>, long long>> top_lines_, bottom_lines_;
+		mutable std::vector<std::pair<std::pair<float, float>, float>> top_lines_, bottom_lines_;
 
 		std::pair<int, int> GetTangentIdsNaive(const Point& a) const;
 		std::pair<int, int> GetTangentIdsLogarithmic(const Point& a) const;

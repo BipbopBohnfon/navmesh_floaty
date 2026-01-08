@@ -20,7 +20,7 @@ namespace NavMesh {
 		//
 		// |polygons_to_add| - convex polygons on the map.
 		// |inflate_by| - how far away paths must go from any polygon
-		void AddPolygons(const std::vector<Polygon>& polygons_to_add, int inflate_by);
+		void AddPolygons(const std::vector<Polygon>& polygons_to_add, float inflate_by);
 		
 		// Call any time after AddPolygons().
 		// It removes previously added external points and adds

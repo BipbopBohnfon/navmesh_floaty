@@ -6,7 +6,7 @@
 
 namespace NavMesh {
 
-	void PathFinder::AddPolygons(const std::vector<Polygon>& polygons_to_add, int inflate_by = 0)
+	void PathFinder::AddPolygons(const std::vector<Polygon>& polygons_to_add, float inflate_by = 0)
 	{
 		polygons_.clear();
 		v_.clear();
@@ -92,7 +92,7 @@ namespace NavMesh {
 	{
 		// Remove old points
 		for (const auto& p : ext_points_) {
-			auto it = vertex_ids_.find(p);
+			auto it = vertex_ids_.find(p.Snap());
 			if (it == vertex_ids_.end()) continue;
 			int id = it->second;
 			free_vertices_.push_back(id);
@@ -229,21 +229,23 @@ namespace NavMesh {
 
 	int PathFinder::GetVertex(const Point& c)
 	{
-		auto it = vertex_ids_.find(c);
+		// Use snapped point for map lookup to avoid floating-point precision issues
+		Point snapped = c.Snap();
+		auto it = vertex_ids_.find(snapped);
 		if (it != vertex_ids_.end()) {
 			return it->second;
 		}
 		if (free_vertices_.empty()) {
-			vertex_ids_[c] = (int)v_.size();
-			v_.push_back(c);
+			vertex_ids_[snapped] = (int)v_.size();
+			v_.push_back(c);  // Store original point for accurate calculations
 			edges_.push_back({});
 			return (int)v_.size() - 1;
 		}
 		else {
 			int node = free_vertices_.back();
 			free_vertices_.pop_back();
-			v_[node] = c;
-			vertex_ids_[c] = node;
+			v_[node] = c;  // Store original point for accurate calculations
+			vertex_ids_[snapped] = node;
 			return node;
 		}
 	}

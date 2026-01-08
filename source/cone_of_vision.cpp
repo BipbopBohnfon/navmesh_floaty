@@ -1,23 +1,22 @@
 #include "cone_of_vision.h"
 #include "polygon.h"
 #include "point.h"
-#include "pointf.h"
 
 #define _USE_MATH_DEFINES
-#include <math.h>
+#include <cmath>
 
 namespace NavMesh
 {
-  std::vector<PointF> ConeOfVision::GetVision(const Point& center, const int radius,
-    const int max_angle, const int start_angle, const int angle_step)
+  std::vector<Point> ConeOfVision::GetVision(const Point& center, float radius,
+    float max_angle, float start_angle, float angle_step)
   {
-    std::vector<PointF> vision;
+    std::vector<Point> vision;
 
-    for (int angle = start_angle; angle < start_angle + max_angle; angle += angle_step)
+    for (float angle = start_angle; angle < start_angle + max_angle; angle += angle_step)
     {
-      PointF vision_point(
-        center.x + radius * (float)cos(angle * M_PI / 180),
-        center.y + radius * (float)sin(angle * M_PI / 180));
+      Point vision_point(
+        center.x + radius * std::cos(angle * (float)M_PI / 180.0f),
+        center.y + radius * std::sin(angle * (float)M_PI / 180.0f));
 
       for (auto& polygon : polygons_)
       {
@@ -26,7 +25,7 @@ namespace NavMesh
           Point p1(polygon[i]);
           Point p2(polygon[(i + 1) % polygon.Size()]);
 
-          Segment vision_segment(center, (Point)vision_point);
+          Segment vision_segment(center, vision_point);
 
           if (vision_segment.Intersects(p1, p2))
           {

@@ -1,7 +1,6 @@
 #pragma once
 
 #include "point.h"
-#include "pointf.h"
 
 namespace NavMesh {
 
@@ -20,7 +19,7 @@ namespace NavMesh {
 		// |this| is a tested edge).
 		bool Intersects(const Point& a, const Point& b) const;
 
-		PointF GetIntersection(const Point& a, const Point& b) const;
+		Point GetIntersection(const Point& a, const Point& b) const;
 
 		// Order of point |b| and |e| is ignored.
 		bool operator==(const Segment& other);

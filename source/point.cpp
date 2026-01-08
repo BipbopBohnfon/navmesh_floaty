@@ -3,56 +3,65 @@
 
 namespace NavMesh {
 
-	Point Point::operator+(const Point& other) const 
+	Point Point::operator+(const Point& other) const
 	{
 		return Point(x + other.x, y + other.y);
 	}
 
-	Point Point::operator-(const Point& other) const 
+	Point Point::operator-(const Point& other) const
 	{
 		return Point(x - other.x, y - other.y);
 	}
 
-	// Scalar multiplication.
-	long long Point::operator*(const Point& other) const 
+	// Scalar (dot) product.
+	float Point::operator*(const Point& other) const
 	{
-		return (long long)x * other.x + (long long)y * other.y;
+		return x * other.x + y * other.y;
 	}
 
-	// Pointtor multiplication.
-	long long Point::operator^(const Point& other) const 
+	// Cross product (z-component of 3D cross product).
+	float Point::operator^(const Point& other) const
 	{
-		return (long long)x * other.y - (long long)y * other.x;
+		return x * other.y - y * other.x;
 	}
 
-	Point Point::operator*(int k) const
+	Point Point::operator*(float k) const
 	{
 		return Point(x * k, y * k);
 	}
 
 	bool Point::operator==(const Point& other) const
 	{
-		return x == other.x && y == other.y;
+		return FloatEqual(x, other.x) && FloatEqual(y, other.y);
 	}
 
 	bool Point::operator!=(const Point& other) const
 	{
-		return x != other.x || y != other.y;
+		return !FloatEqual(x, other.x) || !FloatEqual(y, other.y);
 	}
 
 	bool Point::operator<(const Point& other) const
 	{
-		return x < other.x || (x  == other.x && y < other.y);
+		if (x != other.x) return x < other.x;
+		return y < other.y;
 	}
 
-	double Point::Len() const
+	float Point::Len() const
 	{
-		return sqrt(static_cast<double>(x) * x + static_cast<double>(y) * y);
+		return std::sqrt(x * x + y * y);
 	}
 
-	long long Point::Len2() const
+	float Point::Len2() const
 	{
-		return static_cast<long long>(x) * x + static_cast<long long>(y) * y;
+		return x * x + y * y;
+	}
+
+	Point Point::Snap() const
+	{
+		return Point(
+			std::round(x * SNAP_PRECISION) / SNAP_PRECISION,
+			std::round(y * SNAP_PRECISION) / SNAP_PRECISION
+		);
 	}
 
 }

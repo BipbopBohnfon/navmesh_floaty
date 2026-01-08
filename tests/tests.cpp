@@ -1,7 +1,6 @@
 #include "gtest/gtest.h"
 
 #include "point.h"
-#include "pointf.h"
 #include "segment.h"
 #include "polygon.h"
 #include "path_finder.h"
@@ -23,33 +22,33 @@ TEST(Point, Adds) {
 }
 
 TEST(Point, ScalarMultiplication) {
-	EXPECT_EQ(Point(10, 0) * Point(0, 10), 0);
-	EXPECT_EQ(Point(10, 1) * Point(-1, 10), 0);
-	EXPECT_EQ(Point(10, 10) * Point(10, 10), 200);
-	EXPECT_EQ(Point(1, 2) * Point(3, 4), 11);
-	EXPECT_EQ(Point(0, 0) * Point(3, 4), 0);
+	EXPECT_FLOAT_EQ(Point(10, 0) * Point(0, 10), 0);
+	EXPECT_FLOAT_EQ(Point(10, 1) * Point(-1, 10), 0);
+	EXPECT_FLOAT_EQ(Point(10, 10) * Point(10, 10), 200);
+	EXPECT_FLOAT_EQ(Point(1, 2) * Point(3, 4), 11);
+	EXPECT_FLOAT_EQ(Point(0, 0) * Point(3, 4), 0);
 }
 
 TEST(Point, VectorMultiplication) {
-	EXPECT_EQ(Point(10, 0) ^ Point(0, 10), 100);
-	EXPECT_EQ(Point(10, 1) ^ Point(100, 10), 0);
-	EXPECT_EQ(Point(1, 2) ^ Point(3, 4), -2);
-	EXPECT_EQ(Point(0, 0) ^ Point(3, 4), 0);
+	EXPECT_FLOAT_EQ(Point(10, 0) ^ Point(0, 10), 100);
+	EXPECT_FLOAT_EQ(Point(10, 1) ^ Point(100, 10), 0);
+	EXPECT_FLOAT_EQ(Point(1, 2) ^ Point(3, 4), -2);
+	EXPECT_FLOAT_EQ(Point(0, 0) ^ Point(3, 4), 0);
 }
 
 TEST(Point, Scaling) {
-	EXPECT_EQ(Point(10, 1) * 2, Point(20, 2));
+	EXPECT_EQ(Point(10, 1) * 2.0f, Point(20, 2));
 }
 
 TEST(Point, OperationsConsistent) {
 	Point a(1, 6);
 	Point b(3, 15);
 	Point c(18, -5);
-	int k = 5;
-	EXPECT_EQ((a - b) * c, a * c - b * c);
+	float k = 5;
+	EXPECT_FLOAT_EQ((a - b) * c, a * c - b * c);
 	EXPECT_EQ((a - b) * k, a * k - b * k);
-	EXPECT_EQ((a - b) ^ c, (a ^ c) - (b ^ c));
-	EXPECT_EQ((a * k) ^ b, (a ^ b) * k);
+	EXPECT_FLOAT_EQ((a - b) ^ c, (a ^ c) - (b ^ c));
+	EXPECT_FLOAT_EQ((a * k) ^ b, (a ^ b) * k);
 }
 
 TEST(Segment, Intersects) {
@@ -104,7 +103,9 @@ TEST(Segment, Intersects) {
 
 TEST(Segment, GetIntersection) {
 	Segment s1(Point(0, 10), Point(10, 10));
-	EXPECT_EQ(Point(5, 10), (Point)s1.GetIntersection(Point(5, 0), Point(5, 15)));
+	Point result = s1.GetIntersection(Point(5, 0), Point(5, 15));
+	EXPECT_NEAR(result.x, 5.0f, EPSILON);
+	EXPECT_NEAR(result.y, 10.0f, EPSILON);
 }
 
 TEST(Polygon, ConstructsConvexHullOnAddedPoints) {
@@ -214,7 +215,7 @@ TEST(Polygon, GetsTangentsSegment) {
 	Point a;
 	// All values computed by hand.
 
-	// In the upper semi-plane. 
+	// In the upper semi-plane.
 	a = Point(5, 10000);
 	EXPECT_EQ(p.GetTangentIds(a), std::make_pair(1, 0));
 	a = Point(100000, 10);
@@ -222,7 +223,7 @@ TEST(Polygon, GetsTangentsSegment) {
 	a = Point(-100000, 10);
 	EXPECT_EQ(p.GetTangentIds(a), std::make_pair(1, 0));
 
-	// In the lower semi-plane. 
+	// In the lower semi-plane.
 	a = Point(5, -10000);
 	EXPECT_EQ(p.GetTangentIds(a), std::make_pair(0, 1));
 	a = Point(100000, -10);
@@ -451,7 +452,7 @@ TEST(Polygon, IsTangentConsistent) {
 
 	for (int x = -100; x <= 1200; x += 100) {
 		for (int y = -100; y <= 1200; y += 100) {
-			Point a(x, y);
+			Point a((float)x, (float)y);
 			auto ids = p.GetTangentIds(a);
 			if (ids.first < 0 || ids.first == ids.second) continue;
 
@@ -483,8 +484,8 @@ double GetDistanceFromPointToSegment(Point o, Point s1, Point s2) {
 	// Get signed distance to the line.
 	double distance = fabs(a * o.x + b * o.y + c);
 	// Check if projection of o lies inside the segment.
-	long long dir1 = (o - s1) * (s2 - s1);
-	long long dir2 = (o - s2) * (s1 - s2);
+	float dir1 = (o - s1) * (s2 - s1);
+	float dir2 = (o - s2) * (s1 - s2);
 
 	if (dir1 >= 0 && dir2 >= 0) {
 		return distance;
@@ -497,13 +498,13 @@ TEST(Polygon, InflateOnePoint) {
 	Polygon p;
 	Point o(0, 0);
 	p.AddPoint(o);
-	int kInflationDistance = 10;
+	float kInflationDistance = 10;
 	Polygon res = p.Inflate(kInflationDistance);
 	ASSERT_EQ(res.Size(), 4);
 
 	// Corners spaced at right angles.
 	for (int i = 0; i < 4; ++i) {
-		EXPECT_EQ((res[i] - o) * (res[(i + 1) % 4] - o), 0);
+		EXPECT_NEAR((res[i] - o) * (res[(i + 1) % 4] - o), 0, EPSILON);
 	}
 
 	// Corners rotate counter clockwise.
@@ -514,7 +515,7 @@ TEST(Polygon, InflateOnePoint) {
 	// Sides are far enough.
 	for (int i = 0; i < 4; ++i) {
 		double distance = GetDistanceFromPointToSegment(o, res[i], res[(i + 1) % 4]);
-		EXPECT_GE(distance, kInflationDistance - 1e-9);
+		EXPECT_GE(distance, kInflationDistance - 1e-5);
 	}
 
 	EXPECT_TRUE(res.IsInside(o));
@@ -524,7 +525,7 @@ TEST(Polygon, InflateSegment) {
 	Polygon p;
 	p.AddPoint(100, 304);
 	p.AddPoint(108, 254);
-	int kInflationDistance = 10;
+	float kInflationDistance = 10;
 	const int kExpectedNumPoints = 6;
 	Polygon res = p.Inflate(kInflationDistance);
 	ASSERT_EQ(res.Size(), kExpectedNumPoints);
@@ -541,7 +542,7 @@ TEST(Polygon, InflateSegment) {
 		EXPECT_TRUE(res.IsInside(p[j]));
 		for (int i = 0; i < 4; ++i) {
 			double distance = GetDistanceFromPointToSegment(p[j], res[i], res[(i + 1) % kExpectedNumPoints]);
-			EXPECT_GE(distance, kInflationDistance - 1e-9);
+			EXPECT_GE(distance, kInflationDistance - 1e-5);
 		}
 	}
 }
@@ -551,7 +552,7 @@ TEST(Polygon, InflateTriangle) {
 	p.AddPoint(100, 304);
 	p.AddPoint(108, 254);
 	p.AddPoint(50, 101);
-	int kInflationDistance = 10;
+	float kInflationDistance = 10;
 	const int kExpectedNumPoints = 7;
 	Polygon res = p.Inflate(kInflationDistance);
 	ASSERT_EQ(res.Size(), kExpectedNumPoints);
@@ -568,7 +569,7 @@ TEST(Polygon, InflateTriangle) {
 		EXPECT_TRUE(res.IsInside(p[j]));
 		for (int i = 0; i < kExpectedNumPoints; ++i) {
 			double distance = GetDistanceFromPointToSegment(p[j], res[i], res[(i + 1) % kExpectedNumPoints]);
-			EXPECT_GE(distance, kInflationDistance - 1e-9);
+			EXPECT_GE(distance, kInflationDistance - 1e-5);
 		}
 	}
 }
@@ -945,7 +946,7 @@ TEST(Polygon, IntersectsPoint) {
 	Point a;
 	Point b;
 
-	// Allways no intersections no matter that.
+	// Always no intersections no matter that.
 	a = Point(-1, -1);
 	b = Point(10, 10);
 	EXPECT_FALSE(p.Intersects(Segment(a, b), p.GetTangentIds(a)));
@@ -1194,7 +1195,7 @@ TEST(PathFinder, CantPassThroughIntersection) {
 
 
 TEST(PathFinder, BuildsAllTangents) {
-	// Two triangles froming a 6-corner star.
+	// Two triangles forming a 6-corner star.
 	Polygon p;
 	p.AddPoint(0, 0);
 	p.AddPoint(10, 0);
@@ -1231,15 +1232,15 @@ TEST(PathFinder, BuildsAllTangents) {
 TEST(ConeOfVision, GetsVision) {
 	ConeOfVision cov;
 
-	std::vector<PointF> v1 = cov.GetVision(Point(0, 0), 100);
+	std::vector<Point> v1 = cov.GetVision(Point(0, 0), 100);
 	EXPECT_EQ(v1.size(), 360);
 
-	std::vector<PointF> v2 = cov.GetVision(Point(0, 0), 100, 180);
+	std::vector<Point> v2 = cov.GetVision(Point(0, 0), 100, 180);
 	EXPECT_EQ(v2.size(), 180);
 
-	std::vector<PointF> v3 = cov.GetVision(Point(0, 0), 100, 180, 0);
+	std::vector<Point> v3 = cov.GetVision(Point(0, 0), 100, 180, 0);
 	EXPECT_EQ(v3.size(), 180);
 
-	std::vector<PointF> v4 = cov.GetVision(Point(0, 0), 100, 180, 0, 2);
+	std::vector<Point> v4 = cov.GetVision(Point(0, 0), 100, 180, 0, 2);
 	EXPECT_EQ(v4.size(), 90);
 }
