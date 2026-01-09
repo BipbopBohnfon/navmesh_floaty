@@ -1,11 +1,11 @@
 #pragma once
 
 #include <cmath>
+#include <functional>
 
 namespace NavMesh {
 
 	constexpr float EPSILON = 1e-6f;
-	constexpr float SNAP_PRECISION = 1000.0f;  // Snap to 0.001 precision
 
 	inline bool FloatEqual(float a, float b) {
 		return std::abs(a - b) < EPSILON;
@@ -24,9 +24,8 @@ namespace NavMesh {
 	class Point
 	{
 	public:
-		Point() : x(0), y(0) {}
+		Point() : x(0.0f), y(0.0f) {}
 		Point(float x, float y) : x(x), y(y) {}
-		Point(int x, int y) : x(static_cast<float>(x)), y(static_cast<float>(y)) {}
 
 		Point& operator=(const Point& other) = default;
 
@@ -52,10 +51,17 @@ namespace NavMesh {
 		// Squared length.
 		float Len2() const;
 
-		// Returns a copy snapped to grid for stable map lookups.
-		Point Snap() const;
-
 		float x, y;
+	};
+
+	// Hash function for Point, enabling use in unordered_map/unordered_set.
+	struct PointHash {
+		size_t operator()(const Point& p) const noexcept {
+			// Combine x and y hashes using bit mixing
+			size_t hx = std::hash<float>{}(p.x);
+			size_t hy = std::hash<float>{}(p.y);
+			return hx ^ (hy << 1);
+		}
 	};
 
 }

@@ -7,24 +7,32 @@ namespace NavMesh {
 	class Segment
 	{
 	public:
-		Segment() : b(0, 0), e(0, 0) {}
-		Segment(Point b, Point e) : b(b), e(e) {}
+		Segment() : b(0.0f, 0.0f), e(0.0f, 0.0f) {}
+		Segment(Point begin, Point end) : b(begin), e(end) {}
 
-		// Check for intersection with segment |a|-|b|.
-		// Endpoints of |this| segment are not counted!
-		// |a| and |b| are counted as intersection.
-		// Parallel segments are never intersecting!
-		// (The segment can end at the polygon and
-		// |a| and |b| are always vertices of the polygon and
-		// |this| is a tested edge).
-		bool Intersects(const Point& a, const Point& b) const;
+		// Check for intersection with segment |other_begin|-|other_end|.
+		//
+		// Asymmetric intersection semantics (designed for visibility graph):
+		// - Endpoints of |this| segment are NOT counted as intersections.
+		// - Endpoints |other_begin| and |other_end| ARE counted as intersections.
+		// - Parallel/collinear segments never intersect.
+		//
+		// This allows edges to touch polygon vertices without being blocked,
+		// while preventing edges from crossing through polygon interiors.
+		bool Intersects(const Point& other_begin, const Point& other_end) const;
 
-		Point GetIntersection(const Point& a, const Point& b) const;
+		// Returns the intersection point of this segment's line with another segment's line.
+		// Assumes segments are not parallel. Returns midpoint of |this| as fallback if parallel.
+		Point GetIntersection(const Point& other_begin, const Point& other_end) const;
 
-		// Order of point |b| and |e| is ignored.
-		bool operator==(const Segment& other);
+		// Equality comparison (direction-independent).
+		bool operator==(const Segment& other) const;
 
-		Point b, e;
+		// Segment begin point.
+		Point b;
+
+		// Segment end point.
+		Point e;
 	};
 
 }

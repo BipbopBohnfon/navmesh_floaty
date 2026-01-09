@@ -1,4 +1,5 @@
 #include "point.h"
+#include "pointf.h"
 #include "segment.h"
 #include "polygon.h"
 #include "path_finder.h"
@@ -28,7 +29,6 @@ ClickMode click_mode = ClickMode::kNone;
 // Debug parameters, controlled from keyboard.
 bool draw_edges = false;
 bool inflate = true;
-int cone_radius = 100;
 
 // Currently constructed polygon.
 NavMesh::Polygon cur_polygon;
@@ -47,14 +47,19 @@ NavMesh::Point cursor_position;
 NavMesh::ConeOfVision cone_of_vision;
 NavMesh::PathFinder path_finder;
 
+// Camera for panning and zooming.
+Camera2D camera = { 0 };
+float camera_speed = 500.0f;  // World units per second
+
 void GeneratePolygons() {
     const int N = 100;
     const int K = 10;
+    const int world_size = 5000;  // Larger world for spatial grid benefits
     polygons.clear();
     for (int i = 0; i < N; i++) {
         NavMesh::Polygon p;
-        int x = 30 + rand() % 1000;
-        int y = 30 + rand() % 600;
+        int x = rand() % world_size;
+        int y = rand() % world_size;
         for (int j = 0; j < K; ++j) {
             p.AddPoint(x + rand() % 50, y + rand() % 50);
         }
@@ -64,16 +69,16 @@ void GeneratePolygons() {
 }
 
 void GenerateCircles() {
-    const int N = 30;
-    const int K = 24;
-    const int R = 25;
+    const int N = 100;
+    const int K = 50;
+    const int world_size = 5000;
     polygons.clear();
     for (int i = 0; i < N; i++) {
         NavMesh::Polygon p;
-        int x = R + rand() % 900;
-        int y = R + rand() % 500;
+        int x = rand() % world_size;
+        int y = rand() % world_size;
         for (int j = 0; j < K; ++j) {
-            p.AddPoint(x + (int)(cos(2 * M_PI * j / K) * R), y + (int)(sin(2 * M_PI * j / K) * R));
+            p.AddPoint(x + (int)cos(2 * M_PI * j / K) * 30, y + (int)sin(2 * M_PI * j / K) * 30);
         }
         polygons.push_back(p);
     }
@@ -82,11 +87,12 @@ void GenerateCircles() {
 
 void GenerateGrid() {
     const int N = 100;
+    const int grid_spacing = 200;  // Spread out over larger area
     polygons.clear();
     for (int i = 0; i < N; i++) {
         NavMesh::Polygon p;
-        int x = 200 + i / 10 * 40;
-        int y = 200 + i % 10 * 40;
+        int x = 200 + i / 10 * grid_spacing;
+        int y = 200 + i % 10 * grid_spacing;
         p.AddPoint(x + 10, y + 10);
         p.AddPoint(x - 10, y + 10);
         p.AddPoint(x - 10, y - 10);
@@ -142,9 +148,17 @@ int main() {
     InitWindow(screenWidth, screenHeight, "NavMesh Demo");
     SetTargetFPS(60);
 
+    // Initialize camera
+    camera.target = (Vector2){ 500.0f, 350.0f };  // Center of original view
+    camera.offset = (Vector2){ (float)screenWidth / 2.0f, (float)screenHeight / 2.0f };
+    camera.rotation = 0.0f;
+    camera.zoom = 1.0f;
+
     while (!WindowShouldClose()) {
-        // Update cursor position
-        cursor_position = NavMesh::Point(GetMouseX(), GetMouseY());
+        // Update cursor position (convert screen to world coordinates)
+        Vector2 screen_pos = GetMousePosition();
+        Vector2 world_pos = GetScreenToWorld2D(screen_pos, camera);
+        cursor_position = NavMesh::Point(world_pos.x, world_pos.y);
 
         // Handle keyboard input
         if (click_mode == ClickMode::kNone) {
@@ -182,13 +196,20 @@ int main() {
             }
         }
 
-        // Cone radius controls (work in any mode)
-        if (IsKeyPressed(KEY_EQUAL) || IsKeyPressed(KEY_KP_ADD)) {
-            cone_radius += 10;
+        // Camera zoom with scroll wheel
+        float wheel = GetMouseWheelMove();
+        if (wheel != 0) {
+            camera.zoom += wheel * 0.1f;
+            if (camera.zoom < 0.1f) camera.zoom = 0.1f;
+            if (camera.zoom > 10.0f) camera.zoom = 10.0f;
         }
-        if (IsKeyPressed(KEY_MINUS) || IsKeyPressed(KEY_KP_SUBTRACT)) {
-            cone_radius = (cone_radius > 10) ? cone_radius - 10 : 10;
-        }
+
+        // Camera pan with arrow keys
+        float dt = GetFrameTime();
+        if (IsKeyDown(KEY_LEFT)) camera.target.x -= camera_speed * dt / camera.zoom;
+        if (IsKeyDown(KEY_RIGHT)) camera.target.x += camera_speed * dt / camera.zoom;
+        if (IsKeyDown(KEY_UP)) camera.target.y -= camera_speed * dt / camera.zoom;
+        if (IsKeyDown(KEY_DOWN)) camera.target.y += camera_speed * dt / camera.zoom;
 
         // Handle mouse movement for dragging
         if (click_mode == ClickMode::kMoveDestination) {
@@ -265,7 +286,7 @@ int main() {
         auto geo_done_time = std::chrono::high_resolution_clock::now();
 
         std::vector<NavMesh::Point> path = path_finder.GetPath(source_coordinates, dest_coordinates);
-        std::vector<NavMesh::Point> vision = cone_of_vision.GetVision(source_coordinates, cone_radius);
+        std::vector<NavMesh::PointF> vision = cone_of_vision.GetVision(source_coordinates, 100);
 
         auto end_time = std::chrono::high_resolution_clock::now();
 
@@ -273,8 +294,8 @@ int main() {
         BeginDrawing();
         ClearBackground(WHITE);
 
-        // Draw prompt
-        DrawText(GetPrompt(), 400, 20, 16, BLACK);
+        // Begin camera mode for world-space drawing
+        BeginMode2D(camera);
 
         // Draw all polygons
         for (const auto& p : polygons) {
@@ -303,9 +324,6 @@ int main() {
             for (const auto& e : edges) {
                 DrawSegment(e, GRAY);
             }
-            std::stringstream ss;
-            ss << edges.size() << " edges";
-            DrawText(ss.str().c_str(), 1000, 10, 16, BLACK);
         }
 
         // Draw the path
@@ -315,12 +333,18 @@ int main() {
 
         // Draw cone of vision
         for (size_t i = 0; i + 1 < vision.size(); ++i) {
-            DrawSegment(NavMesh::Segment(vision[i], vision[i + 1]), BLACK);
+            DrawSegment(NavMesh::Segment((NavMesh::Point)vision[i], (NavMesh::Point)vision[i + 1]), BLACK);
         }
 
         // Draw source and destination as circles
         DrawCircleLines((int)source_coordinates.x, (int)source_coordinates.y, 5, GREEN);
         DrawCircleLines((int)dest_coordinates.x, (int)dest_coordinates.y, 5, RED);
+
+        // End camera mode before drawing UI
+        EndMode2D();
+
+        // Draw UI elements (screen-space, not affected by camera)
+        DrawText(GetPrompt(), 400, 20, 16, BLACK);
 
         // Draw timing info
         int64_t millis_total = (end_time - start_time) / std::chrono::milliseconds(1);
@@ -331,8 +355,24 @@ int main() {
 
         // Draw toggle states
         std::stringstream toggles;
-        toggles << "Edges: " << (draw_edges ? "ON" : "OFF") << "  Inflate: " << (inflate ? "ON" : "OFF") << "  Cone: " << cone_radius << " (+/-)";
+        toggles << "Edges: " << (draw_edges ? "ON" : "OFF") << "  Inflate: " << (inflate ? "ON" : "OFF");
         DrawText(toggles.str().c_str(), 10, 30, 14, DARKGRAY);
+
+        // Draw camera state
+        std::stringstream cam_info;
+        cam_info << "Zoom: " << camera.zoom << "  Target: (" << (int)camera.target.x << ", " << (int)camera.target.y << ")";
+        DrawText(cam_info.str().c_str(), 10, 50, 14, DARKGRAY);
+
+        // Draw edge count if enabled
+        if (draw_edges) {
+            auto edges = path_finder.GetEdgesForDebug();
+            std::stringstream edge_ss;
+            edge_ss << edges.size() << " edges";
+            DrawText(edge_ss.str().c_str(), 10, 70, 14, DARKGRAY);
+        }
+
+        // Draw controls hint
+        DrawText("Arrow keys: Pan | Scroll: Zoom", 10, screenHeight - 20, 14, DARKGRAY);
 
         EndDrawing();
     }
