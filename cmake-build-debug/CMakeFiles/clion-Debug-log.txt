@@ -1,0 +1,69 @@
+/home/bipbop/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/bin/cmake -DCMAKE_BUILD_TYPE=Debug -DCMAKE_MAKE_PROGRAM=/home/bipbop/.local/share/JetBrains/Toolbox/apps/clion/bin/ninja/linux/x64/ninja -G Ninja -S /home/bipbop/Documents/navmesh_floaty -B /home/bipbop/Documents/navmesh_floaty/cmake-build-debug
+-- The C compiler identification is GNU 15.2.1
+-- The CXX compiler identification is GNU 15.2.1
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+CMake Deprecation Warning at cmake-build-debug/_deps/googletest-src/CMakeLists.txt:4 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+CMake Deprecation Warning at cmake-build-debug/_deps/googletest-src/googlemock/CMakeLists.txt:39 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+CMake Deprecation Warning at cmake-build-debug/_deps/googletest-src/googletest/CMakeLists.txt:49 (cmake_minimum_required):
+  Compatibility with CMake < 3.10 will be removed from a future version of
+  CMake.
+
+  Update the VERSION argument <min> value.  Or, use the <min>...<max> syntax
+  to tell CMake that the project requires at least <min> but has been updated
+  to work with policies introduced by <max> or earlier.
+
+
+-- Found Python: /usr/bin/python3.13 (found version "3.13.11") found components: Interpreter
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+-- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+-- Found Threads: TRUE
+[1/9] Creating directories for 'raylib-populate'
+[1/9] Performing download step (git clone) for 'raylib-populate'
+Cloning into 'raylib-src'...
+fatal: could not open '/home/bipbop/Documents/navmesh_floaty/cmake-build-debug/_deps/raylib-src/.git/objects/pack/tmp_pack_6MSbDZ' for reading: No such file or directory
+fatal: fetch-pack: invalid index-pack output
+Had to git clone more than once: 3 times.
+CMake Error at raylib-subbuild/raylib-populate-prefix/tmp/raylib-populate-gitclone.cmake:50 (message):
+  Failed to clone repository: 'https://github.com/raysan5/raylib.git'
+
+
+FAILED: raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-download /home/bipbop/Documents/navmesh_floaty/cmake-build-debug/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-download 
+cd /home/bipbop/Documents/navmesh_floaty/cmake-build-debug/_deps && /home/bipbop/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/bin/cmake -DCMAKE_MESSAGE_LOG_LEVEL=VERBOSE -P /home/bipbop/Documents/navmesh_floaty/cmake-build-debug/_deps/raylib-subbuild/raylib-populate-prefix/tmp/raylib-populate-gitclone.cmake && /home/bipbop/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/bin/cmake -E touch /home/bipbop/Documents/navmesh_floaty/cmake-build-debug/_deps/raylib-subbuild/raylib-populate-prefix/src/raylib-populate-stamp/raylib-populate-download
+ninja: build stopped: subcommand failed.
+
+CMake Error at /home/bipbop/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/share/cmake-4.0/Modules/FetchContent.cmake:1918 (message):
+  Build step for raylib failed: 1
+Call Stack (most recent call first):
+  /home/bipbop/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/share/cmake-4.0/Modules/FetchContent.cmake:1609 (__FetchContent_populateSubbuild)
+  /home/bipbop/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/share/cmake-4.0/Modules/FetchContent.cmake:2145:EVAL:2 (__FetchContent_doPopulation)
+  /home/bipbop/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/share/cmake-4.0/Modules/FetchContent.cmake:2145 (cmake_language)
+  /home/bipbop/.local/share/JetBrains/Toolbox/apps/clion/bin/cmake/linux/x64/share/cmake-4.0/Modules/FetchContent.cmake:2384 (__FetchContent_Populate)
+  third_party/CMakeLists.txt:19 (FetchContent_MakeAvailable)
+
+
+-- Configuring incomplete, errors occurred!

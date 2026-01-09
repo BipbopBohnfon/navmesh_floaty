@@ -3,12 +3,13 @@
 #include <vector>
 #include <map>
 #include <utility>
-	
+#include <mutex>
 
 #include "point.h"
 #include "polygon.h"
 #include "segment.h"
-
+#include "spatial_grid.h"
+#include "parallel.h"
 
 namespace NavMesh {
 
@@ -21,11 +22,11 @@ namespace NavMesh {
 		// |polygons_to_add| - convex polygons on the map.
 		// |inflate_by| - how far away paths must go from any polygon
 		void AddPolygons(const std::vector<Polygon>& polygons_to_add, float inflate_by);
-		
+
 		// Call any time after AddPolygons().
 		// It removes previously added external points and adds
 		// |points| to the graph.
-	  void AddExternalPoints(const std::vector<Point>& points_);
+		void AddExternalPoints(const std::vector<Point>& points_);
 
 		// Get shortest path between two points.
 		// points must be first added via AddExternalPoints().
@@ -33,12 +34,25 @@ namespace NavMesh {
 
 		// For debugging. Returns all the edges in the graph.
 		std::vector<Segment> GetEdgesForDebug() const;
+
 	private:
 		int GetVertex(const Point& c);
 		void AddEdge(int be, int en);
+
+		// Original O(n) check - kept for compatibility
 		bool CanAddSegment(const Segment& s, const std::vector<std::pair<int, int>>& tangents);
 
+		// Optimized O(m) check using spatial grid where m << n
+		bool CanAddSegmentOptimized(const Segment& s, const std::vector<std::pair<int, int>>& tangents);
+
+		// Compute AABB for a polygon
+		AABB ComputePolygonAABB(const Polygon& p) const;
+
+		// Build the spatial grid from current polygons
+		void BuildSpatialGrid();
+
 		std::vector<Polygon> polygons_;
+		std::vector<AABB> polygon_aabbs_;  // Bounding boxes for each polygon
 		std::vector<Point> ext_points_;
 
 		std::vector<int> free_vertices_;
@@ -48,7 +62,27 @@ namespace NavMesh {
 		std::vector<std::vector<bool>> polygon_point_is_inside_;
 
 		std::vector<std::vector<std::pair<int, double>>> edges_;
-	};
 
+		// Spatial partitioning for O(1) nearby polygon lookup
+		SpatialGrid spatial_grid_;
+		bool use_spatial_optimization_ = true;
+		bool use_parallel_ = true;
+
+		// Reusable buffer for spatial queries (avoid repeated allocations)
+		mutable std::vector<int> query_buffer_;
+
+		// Single mutex for all graph modifications (v_, edges_, vertex_ids_, free_vertices_)
+		std::mutex graph_mutex_;
+
+		// Thread-safe edge addition
+		void AddEdgeThreadSafe(int be, int en);
+
+		// Thread-safe vertex lookup/creation
+		int GetVertexThreadSafe(const Point& c);
+
+		// Lock-free vertex lookup (returns -1 if not found)
+		// Safe when all vertices have been pre-allocated
+		int GetVertexLockFree(const Point& c) const;
+	};
 
 }

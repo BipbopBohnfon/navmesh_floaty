@@ -8,7 +8,7 @@ The project also contains a little demo.
 
 
 The main feature of this library is its speed: for a moderate amount (100) of quite big polygons (20 points each) the library computes
-everything in 7-8ms on a i7-6700k CPU. It doesn't require baking in the graph around the geometry, which allows compeletely dynamic geometry of the map.
+everything in 7-8ms on a i7-6700k CPU. It doesn't require baking in the graph around the geometry, which allows completely dynamic geometry of the map.
 
 ## Usage
 
@@ -17,15 +17,51 @@ Alternatively, since it's a small project, you can just add all files from ``sou
 
 The main class is ``NavMesh::PathFinder``. There are also ``NavMesh::Point``, ``NavMesh::Segment`` and ``NavMesh::Polygon`` for geometric logic.
 
+**All coordinates use single-precision floating-point values (float).** This allows for sub-pixel precision in pathfinding calculations.
+
+### Quick Example
+
+```cpp
+#include "path_finder.h"
+#include "polygon.h"
+#include "point.h"
+
+// Create an obstacle polygon using float coordinates
+NavMesh::Polygon obstacle;
+obstacle.AddPoint(100.0f, 100.0f);
+obstacle.AddPoint(200.0f, 100.0f);
+obstacle.AddPoint(200.0f, 200.0f);
+obstacle.AddPoint(100.0f, 200.0f);
+
+// Set up pathfinder with obstacles
+NavMesh::PathFinder pathfinder;
+pathfinder.AddPolygons({obstacle}, 10.0f);  // 10.0f inflation distance
+
+// Define start and end points
+NavMesh::Point start(50.0f, 150.0f);
+NavMesh::Point end(250.0f, 150.0f);
+
+// Add external points and find path
+pathfinder.AddExternalPoints({start, end});
+std::vector<NavMesh::Point> path = pathfinder.GetPath(start, end);
+
+// path now contains waypoints as float coordinates
+for (const auto& point : path) {
+    // point.x and point.y are floats
+}
+```
+
+### API Reference
+
 ``PathFinder::AddPolygons`` should be called each time the map changes.
-This is the slowest one, which takes ``O(n^3*k)`` time, where ``n``in the number of polygons, and ``k`` is average number of points in each.
+This is the slowest one, which takes ``O(n^3*k)`` time, where ``n`` is the number of polygons, and ``k`` is average number of points in each.
 This method consumes ``O(n^2*k)`` memory in the worst case (usually much less, as most of the edges are not valid due to intersections).
 Ideally, it should be called only if the map is updated.
 
 ``PathFinder::AddExternalPoints`` should be called after ``AddPolygons`` each time coordinates of external points change.
 This method takes ``O(p*n^2)`` time and consumes ``O(n*p)`` memory, where ``p`` is the number of points added.
 
-``PathFinder::FindPath`` should be called each time you need a path between two points. The points must be one of the external points.
+``PathFinder::GetPath`` should be called each time you need a path between two points. The points must be one of the external points.
 This method takes ``O((n*k+p)*n*log(n*k+p))`` time and uses ``O((n+p)*n)`` memory.
 
 
@@ -36,33 +72,52 @@ Then it uses A* on the constructed graph to find the shortest path. This impleme
 The path finding on the graph take negligibly small amout of time - most computations are spent on constructing the graph.
 Already computed tangents are reused to check for intersections of potential edges and obstacles in O(1). A fast logarithmic method is used for checking if points are inside an obstacle and for tangents construction.
 
-## Code structure
-``source/`` directory contains the library, ``tests/`` directory contains tests and ``demo/`` directory contains a simple Windows demo application.
-``point.cpp``, ``segment.cpp``, and ``polygon.cpp`` contain geometry primitives with necessary logic implemented on them.
-``path_finder.cpp`` contains the main class, which invokes geometry calculations, constructs the graph and uses A* to find the path between two given points.
+## Code Structure
+
+| Directory | Contents |
+|-----------|----------|
+| ``source/`` | Core library files |
+| ``tests/`` | GoogleTest unit tests |
+| ``demo/`` | Cross-platform raylib demo application |
+
+### Source Files
+
+| File | Description |
+|------|-------------|
+| ``point.h/cpp`` | 2D point class with float coordinates (x, y), vector operations |
+| ``segment.h/cpp`` | Line segment class for intersection detection |
+| ``polygon.h/cpp`` | Convex polygon with float vertices, tangent computation, inflation |
+| ``path_finder.h/cpp`` | Main pathfinding class - visibility graph construction and A* search |
+| ``cone_of_vision.h/cpp`` | Field-of-view calculation utility |
 
 ## Demo
-A demo is a simple windows GUI application. It uses GDI+ to draw obstacles and the path around them, as well as outputting some statistics.
-The user interaction is mostly happening through the menu. Following items are available:
+The demo is a cross-platform GUI application using raylib. It visualizes obstacles and paths using float coordinates, and displays performance statistics.
 
-* Polygon
-  * Add - click on the screen to add the point to the new polygon. Right click to add the polygon to the map.
-  if you right click with empty current polygon you will exit the adding mode.
-  * Delete - click inside the polygon you would like to delete. Right click to exit the mode.
-* Move
-  * Source - move mouse around to move the source point. Click to fix the source.
-  * Destination - move mouse around to move the Destination point. Click to fix the source.
-* Debug
-  * Generate grid - will put on the map a grid of squares.
-  * Generate polygons - will randomly generate 100 polygons on the map.
-  * Generate circles - will randomly generate 100 circles on the map (more detailed obstacles).
-  * Inflate polygons - toggles if the path should walk around the polygons or can stick to them. Inflation will double the amount of points, slowing the calculations down.
-  * Show edges - toggle if the edges of the graph are shown.
-  * Benchmark - Generate polygons and find path non-stop 200 times and output the average time spent.
+### Keyboard Controls
 
-You can also drag the source or the destination circles (if no action is selected). Current action is always shown at the top of the window. 
-The upper left corner shows how much time all path related calulations took and how much geometrical calculations took specifically. There's also the result of the last benchmark.
-Drawing is not included in any measurements and is quite slow, especially if you choose to draw edges.
+| Key | Action |
+|-----|--------|
+| **A** | Add polygon mode - click to add points, right-click to finish |
+| **D** | Delete polygon mode - click inside polygon to delete |
+| **S** | Move source point |
+| **T** | Move destination/target point |
+| **E** | Toggle edge visibility |
+| **I** | Toggle polygon inflation (10.0f units) |
+| **P** | Generate 100 random polygons |
+| **C** | Generate 30 random circles (24-sided polygons) |
+| **G** | Generate 10x10 grid of squares |
+| **B** | Run benchmark (500 iterations) |
+| **+/-** | Adjust cone of vision radius |
+| **Esc** | Cancel current mode |
+
+You can also drag the source (green) or destination (red) circles directly. The current mode is shown at the top of the window.
+
+The upper-left corner displays timing information:
+- **total**: Total time for pathfinding calculations
+- **geo**: Time spent on geometry/graph construction
+- **bench**: Average time from last benchmark run
+
+Drawing is not included in measurements.
 
 ## Building
 

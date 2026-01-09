@@ -1,3 +1,5 @@
+find_package(Threads REQUIRED)
+
 add_library(
         navmesh
         point.h point.cpp
@@ -5,4 +7,8 @@ add_library(
         polygon.h polygon.cpp
         path_finder.h path_finder.cpp
         cone_of_vision.h cone_of_vision.cpp
+        spatial_grid.h
+        parallel.h
 )
+
+target_link_libraries(navmesh PUBLIC Threads::Threads)

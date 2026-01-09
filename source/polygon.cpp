@@ -49,7 +49,7 @@ namespace NavMesh {
 
 		// Check if this point fits nicely after the last one.
 		// Fast path for already ordered points being added.
-		Point prev_side = points_.back() - points_[points_.size() - 1];
+		Point prev_side = points_.back() - points_[points_.size() - 2];
 		Point new_side1 = a - points_.back();
 		Point new_side2 = points_[0] - a;
 		Point next_side = points_[1] - points_[0];
@@ -227,6 +227,9 @@ namespace NavMesh {
 		// Sides of a 2*r x 2*r square.
 		Point inflation_sides[4] = { {2*r, 0.0f}, {0.0f, 2*r}, {-2*r, 0.0f}, {0.0f, -2*r} };
 
+		// Reserve capacity: original polygon points + up to 4 square corners
+		res.points_.reserve(points_.size() + 4);
+
 		// Find leftmost bottom corner.
 		int start = 0;
 		for (size_t i = 0; i < points_.size(); ++i) {
@@ -276,6 +279,7 @@ namespace NavMesh {
 		xs_.clear();
 		top_lines_.clear();
 		bottom_lines_.clear();
+		xs_.reserve(points_.size());
 		for (const auto& point : points_) {
 			xs_.push_back(point.x);
 		}
