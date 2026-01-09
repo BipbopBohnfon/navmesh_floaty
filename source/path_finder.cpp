@@ -424,20 +424,14 @@ namespace NavMesh {
 
 				const auto& cell = grid_cells_[GetCellIndex(cx, cy)];
 				for (size_t poly_idx : cell) {
-					// Avoid duplicates using linear search (cells are small).
-					bool found = false;
-					for (size_t existing : result) {
-						if (existing == poly_idx) {
-							found = true;
-							break;
-						}
-					}
-					if (!found) {
-						result.push_back(poly_idx);
-					}
+					result.push_back(poly_idx);
 				}
 			}
 		}
+
+		// Remove duplicates efficiently: O(n log n) sort + O(n) unique.
+		std::sort(result.begin(), result.end());
+		result.erase(std::unique(result.begin(), result.end()), result.end());
 	}
 
 	void PathFinder::GetPolygonsInRadius(const Point& p, int cell_radius, std::vector<size_t>& result) const
@@ -461,20 +455,14 @@ namespace NavMesh {
 
 				const auto& cell = grid_cells_[GetCellIndex(cx, cy)];
 				for (size_t poly_idx : cell) {
-					// Avoid duplicates.
-					bool found = false;
-					for (size_t existing : result) {
-						if (existing == poly_idx) {
-							found = true;
-							break;
-						}
-					}
-					if (!found) {
-						result.push_back(poly_idx);
-					}
+					result.push_back(poly_idx);
 				}
 			}
 		}
+
+		// Remove duplicates efficiently: O(n log n) sort + O(n) unique.
+		std::sort(result.begin(), result.end());
+		result.erase(std::unique(result.begin(), result.end()), result.end());
 	}
 
 	void PathFinder::GetPolygonsAlongSegment(const Point& start, const Point& end, std::vector<size_t>& result) const
@@ -505,7 +493,7 @@ namespace NavMesh {
 		float x = static_cast<float>(start_x);
 		float y = static_cast<float>(start_y);
 
-		// Track visited cells to avoid duplicates.
+		// Track visited cells to avoid processing the same cell multiple times.
 		std::vector<bool> visited(grid_cells_.size(), false);
 
 		for (int i = 0; i <= steps; ++i) {
@@ -537,17 +525,7 @@ namespace NavMesh {
 
 						const auto& cell = grid_cells_[adj_cell_idx];
 						for (size_t poly_idx : cell) {
-							// Check if already in result.
-							bool found = false;
-							for (size_t existing : result) {
-								if (existing == poly_idx) {
-									found = true;
-									break;
-								}
-							}
-							if (!found) {
-								result.push_back(poly_idx);
-							}
+							result.push_back(poly_idx);
 						}
 					}
 				}
@@ -556,6 +534,10 @@ namespace NavMesh {
 			x += x_inc;
 			y += y_inc;
 		}
+
+		// Remove duplicates efficiently: O(n log n) sort + O(n) unique.
+		std::sort(result.begin(), result.end());
+		result.erase(std::unique(result.begin(), result.end()), result.end());
 	}
 
 	// --- Graph Building Helpers ---
