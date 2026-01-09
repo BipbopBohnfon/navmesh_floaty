@@ -95,6 +95,38 @@ namespace NavMesh {
 		return true;
 	}
 
+	// Lazy version: computes tangents on-the-fly only for polygons along the segment
+	bool PathFinder::CanAddSegmentLazy(const Segment& s, const Point& from_point) {
+		AABB seg_aabb = AABB::FromSegment(s);
+
+		// Query spatial grid for polygons along the segment path
+		spatial_grid_.GetPolygonsAlongSegment(s, query_buffer_);
+
+		for (int i : query_buffer_) {
+			if (!seg_aabb.Overlaps(polygon_aabbs_[i])) {
+				continue;
+			}
+
+			// Compute tangent on-the-fly (only for this polygon)
+			auto tangent = polygons_[i].GetTangentIds(from_point);
+			if (polygons_[i].Intersects(s, tangent)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	// Fallback lazy version without spatial optimization
+	bool PathFinder::CanAddSegmentLazyFallback(const Segment& s, const Point& from_point) {
+		for (size_t i = 0; i < polygons_.size(); ++i) {
+			auto tangent = polygons_[i].GetTangentIds(from_point);
+			if (polygons_[i].Intersects(s, tangent)) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	void PathFinder::AddEdgeThreadSafe(int be, int en) {
 		std::lock_guard<std::mutex> lock(graph_mutex_);
 		double dst = (v_[be] - v_[en]).Len();
@@ -430,6 +462,18 @@ namespace NavMesh {
 
 	void PathFinder::AddExternalPoints(const std::vector<Point>& points_)
 	{
+		// OPTIMIZATION 1: Cache check - skip if points haven't changed
+		if (points_.size() == ext_points_.size()) {
+			bool same = true;
+			for (size_t i = 0; i < points_.size(); ++i) {
+				if (points_[i].Snap() != ext_points_[i].Snap()) {
+					same = false;
+					break;
+				}
+			}
+			if (same) return;  // No change, skip expensive recomputation
+		}
+
 		// Remove old points
 		for (const auto& p : ext_points_) {
 			auto it = vertex_ids_.find(p.Snap());
@@ -455,10 +499,9 @@ namespace NavMesh {
 
 		ext_points_ = points_;
 
-		std::vector<std::pair<int, int>> tangents(polygons_.size());
 		std::vector<bool> point_is_inside(points_.size(), false);
 
-		// Check if external points are inside any polygon
+		// Check if external points are inside any polygon (uses spatial optimization)
 		for (size_t i = 0; i < points_.size(); ++i) {
 			if (use_spatial_optimization_ && !polygons_.empty()) {
 				spatial_grid_.GetPolygonsNearPoint(points_[i], query_buffer_);
@@ -478,53 +521,83 @@ namespace NavMesh {
 			}
 		}
 
+		// OPTIMIZATION 2: Use spatial grid for external point processing
+		// Only compute tangents and add edges for nearby polygons
 		for (size_t i = 0; i < points_.size(); ++i) {
 			const auto& cur_point = points_[i];
 			if (point_is_inside[i]) continue;
 
-			for (size_t j = 0; j < polygons_.size(); ++j) {
-				tangents[j] = polygons_[j].GetTangentIds(cur_point);
-			}
-
-			// Add edges between external points
+			// Add edges between external points (with lazy tangent computation)
 			for (size_t j = i + 1; j < points_.size(); ++j) {
 				if (point_is_inside[j]) continue;
 
 				Segment s(cur_point, points_[j]);
 				bool can_add = use_spatial_optimization_
-					? CanAddSegmentOptimized(s, tangents)
-					: CanAddSegment(s, tangents);
+					? CanAddSegmentLazy(s, cur_point)
+					: CanAddSegmentLazyFallback(s, cur_point);
 
 				if (can_add) {
 					AddEdge(GetVertex(cur_point), GetVertex(points_[j]));
 				}
 			}
 
-			// Add tangents to polygons
-			for (size_t j = 0; j < polygons_.size(); ++j) {
-				const auto& ids = tangents[j];
-				if (ids.first == -1 || ids.second == -1 || ids.first == ids.second)
-					continue;
+			// OPTIMIZATION 3: Only add tangent edges to nearby polygons
+			// Use a search radius based on world size and polygon density
+			if (use_spatial_optimization_ && !polygons_.empty()) {
+				// Compute search radius - use a fraction of the world diagonal
+				// or base it on cell size
+				float search_radius = spatial_grid_.GetCellSize() * 50.0f;
 
-				const Point& other_point1 = polygons_[j].points_[ids.first];
-				if (!polygon_point_is_inside_[j][ids.first]) {
-					Segment s(cur_point, other_point1);
-					bool can_add = use_spatial_optimization_
-						? CanAddSegmentOptimized(s, tangents)
-						: CanAddSegment(s, tangents);
-					if (can_add) {
-						AddEdge(GetVertex(cur_point), GetVertex(other_point1));
+				std::vector<int> nearby_polygons;
+				spatial_grid_.GetPolygonsInRadius(cur_point, search_radius, nearby_polygons);
+
+				for (int j : nearby_polygons) {
+					auto ids = polygons_[j].GetTangentIds(cur_point);
+					if (ids.first == -1 || ids.second == -1 || ids.first == ids.second)
+						continue;
+
+					const Point& other_point1 = polygons_[j].points_[ids.first];
+					if (!polygon_point_is_inside_[j][ids.first]) {
+						Segment s(cur_point, other_point1);
+						if (CanAddSegmentLazy(s, cur_point)) {
+							AddEdge(GetVertex(cur_point), GetVertex(other_point1));
+						}
+					}
+
+					const Point& other_point2 = polygons_[j].points_[ids.second];
+					if (!polygon_point_is_inside_[j][ids.second]) {
+						Segment s(cur_point, other_point2);
+						if (CanAddSegmentLazy(s, cur_point)) {
+							AddEdge(GetVertex(cur_point), GetVertex(other_point2));
+						}
 					}
 				}
+			} else {
+				// Fallback: process all polygons (original behavior)
+				std::vector<std::pair<int, int>> tangents(polygons_.size());
+				for (size_t j = 0; j < polygons_.size(); ++j) {
+					tangents[j] = polygons_[j].GetTangentIds(cur_point);
+				}
 
-				const Point& other_point2 = polygons_[j].points_[ids.second];
-				if (!polygon_point_is_inside_[j][ids.second]) {
-					Segment s(cur_point, other_point2);
-					bool can_add = use_spatial_optimization_
-						? CanAddSegmentOptimized(s, tangents)
-						: CanAddSegment(s, tangents);
-					if (can_add) {
-						AddEdge(GetVertex(cur_point), GetVertex(other_point2));
+				for (size_t j = 0; j < polygons_.size(); ++j) {
+					const auto& ids = tangents[j];
+					if (ids.first == -1 || ids.second == -1 || ids.first == ids.second)
+						continue;
+
+					const Point& other_point1 = polygons_[j].points_[ids.first];
+					if (!polygon_point_is_inside_[j][ids.first]) {
+						Segment s(cur_point, other_point1);
+						if (CanAddSegment(s, tangents)) {
+							AddEdge(GetVertex(cur_point), GetVertex(other_point1));
+						}
+					}
+
+					const Point& other_point2 = polygons_[j].points_[ids.second];
+					if (!polygon_point_is_inside_[j][ids.second]) {
+						Segment s(cur_point, other_point2);
+						if (CanAddSegment(s, tangents)) {
+							AddEdge(GetVertex(cur_point), GetVertex(other_point2));
+						}
 					}
 				}
 			}

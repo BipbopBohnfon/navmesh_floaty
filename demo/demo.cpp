@@ -139,6 +139,41 @@ void GenerateScalabilityGrid(int count, float world_size) {
     polygons_changed = true;
 }
 
+// Generate 10,000 polygons across 50,000x50,000 area for long-distance pathing demo
+void GenerateScale2() {
+    const int N = 10000;
+    const float world_size = 50000.0f;
+
+    polygons.clear();
+    polygons.reserve(N);
+
+    float cell_size = world_size / sqrtf(static_cast<float>(N));
+    int grid_side = static_cast<int>(sqrtf(static_cast<float>(N))) + 1;
+    float rect_size = cell_size * 0.5f;
+
+    for (int i = 0; i < N; i++) {
+        float base_x = static_cast<float>(i % grid_side) * cell_size + cell_size * 0.25f;
+        float base_y = static_cast<float>(i / grid_side) * cell_size + cell_size * 0.25f;
+
+        NavMesh::Polygon p;
+        p.AddPoint(base_x, base_y);
+        p.AddPoint(base_x + rect_size, base_y);
+        p.AddPoint(base_x + rect_size, base_y + rect_size);
+        p.AddPoint(base_x, base_y + rect_size);
+        polygons.push_back(p);
+    }
+
+    // Set source and destination for long-distance pathing
+    source_coordinates = NavMesh::Point(100.0f, 100.0f);
+    dest_coordinates = NavMesh::Point(world_size - 100.0f, world_size - 100.0f);
+
+    // Adjust camera to show the world
+    camera.target = (Vector2){ world_size / 2.0f, world_size / 2.0f };
+    camera.zoom = 0.02f;  // Zoom out to see the whole area
+
+    polygons_changed = true;
+}
+
 ScalabilityResult RunSingleScalabilityTest(int num_polygons, float world_size, float inflate_by) {
     ScalabilityResult result;
     result.num_polygons = num_polygons;
@@ -234,7 +269,7 @@ const char* GetPrompt() {
     case ClickMode::kMoveDestination:
         return "LClick - fix destination";
     default:
-        return "[A]dd [D]el [S]rc [T]gt [E]dges [I]nfl [P]oly [C]ircle [G]rid [B]ench [K]scale | Arrows:pan Scroll:zoom";
+        return "[A]dd [D]el [S]rc [T]gt [E]dges [I]nfl [P]oly [C]ircle [G]rid [B]ench [K]scale [L]arge | Arrows:pan Scroll:zoom";
     }
 }
 
@@ -337,6 +372,9 @@ int main() {
             }
             else if (IsKeyPressed(KEY_K)) {
                 RunScalabilityTest();
+            }
+            else if (IsKeyPressed(KEY_L)) {
+                GenerateScale2();
             }
         }
 

@@ -45,6 +45,10 @@ namespace NavMesh {
 		// Optimized O(m) check using spatial grid where m << n
 		bool CanAddSegmentOptimized(const Segment& s, const std::vector<std::pair<int, int>>& tangents);
 
+		// Lazy tangent computation - computes tangents on-the-fly only for polygons along segment
+		bool CanAddSegmentLazy(const Segment& s, const Point& from_point);
+		bool CanAddSegmentLazyFallback(const Segment& s, const Point& from_point);
+
 		// Compute AABB for a polygon
 		AABB ComputePolygonAABB(const Polygon& p) const;
 
