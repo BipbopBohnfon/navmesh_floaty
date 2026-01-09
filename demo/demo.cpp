@@ -247,6 +247,39 @@ void RunScalabilityTest() {
     GeneratePolygons();
 }
 
+// Get visible world bounds from camera
+struct WorldBounds {
+    float min_x, min_y, max_x, max_y;
+
+    bool Overlaps(float px_min, float py_min, float px_max, float py_max) const {
+        return !(px_max < min_x || px_min > max_x || py_max < min_y || py_min > max_y);
+    }
+};
+
+WorldBounds GetVisibleBounds(const Camera2D& cam, int screen_width, int screen_height) {
+    // Get the four corners of the screen in world coordinates
+    Vector2 top_left = GetScreenToWorld2D({0, 0}, cam);
+    Vector2 bottom_right = GetScreenToWorld2D({static_cast<float>(screen_width), static_cast<float>(screen_height)}, cam);
+
+    return {top_left.x, top_left.y, bottom_right.x, bottom_right.y};
+}
+
+// Get bounding box of a polygon
+void GetPolygonBounds(const NavMesh::Polygon& p, float& min_x, float& min_y, float& max_x, float& max_y) {
+    if (p.Size() == 0) {
+        min_x = min_y = max_x = max_y = 0;
+        return;
+    }
+    min_x = max_x = p[0].x;
+    min_y = max_y = p[0].y;
+    for (int i = 1; i < p.Size(); ++i) {
+        if (p[i].x < min_x) min_x = p[i].x;
+        if (p[i].x > max_x) max_x = p[i].x;
+        if (p[i].y < min_y) min_y = p[i].y;
+        if (p[i].y > max_y) max_y = p[i].y;
+    }
+}
+
 void DrawSegmentWorld(const NavMesh::Segment& s, Color color) {
     DrawLine(static_cast<int>(s.b.x), static_cast<int>(s.b.y),
              static_cast<int>(s.e.x), static_cast<int>(s.e.y), color);
@@ -473,8 +506,22 @@ int main() {
         // Begin 2D camera mode for world-space drawing
         BeginMode2D(camera);
 
-        // Draw all polygons
+        // Get visible bounds for frustum culling
+        WorldBounds visible = GetVisibleBounds(camera, screenWidth, screenHeight);
+
+        // Draw polygons with frustum culling
+        int polygons_drawn = 0;
         for (const auto& p : polygons) {
+            // Get polygon bounds
+            float px_min, py_min, px_max, py_max;
+            GetPolygonBounds(p, px_min, py_min, px_max, py_max);
+
+            // Skip if polygon is outside visible area
+            if (!visible.Overlaps(px_min, py_min, px_max, py_max)) {
+                continue;
+            }
+
+            polygons_drawn++;
             bool red = (click_mode == ClickMode::kDeletePolygon) && p.IsInside(cursor_position);
             DrawPolygonOutline(p, red ? RED : BLACK);
         }
@@ -494,11 +541,18 @@ int main() {
             }
         }
 
-        // Draw debug edges
+        // Draw debug edges with frustum culling
         if (draw_edges) {
             auto edges = path_finder.GetEdgesForDebug();
             for (const auto& e : edges) {
-                DrawSegmentWorld(e, GRAY);
+                // Simple segment-rectangle overlap check
+                float seg_min_x = std::min(e.b.x, e.e.x);
+                float seg_max_x = std::max(e.b.x, e.e.x);
+                float seg_min_y = std::min(e.b.y, e.e.y);
+                float seg_max_y = std::max(e.b.y, e.e.y);
+                if (visible.Overlaps(seg_min_x, seg_min_y, seg_max_x, seg_max_y)) {
+                    DrawSegmentWorld(e, GRAY);
+                }
             }
         }
 
@@ -535,7 +589,7 @@ int main() {
         toggles << "Edges:" << (draw_edges ? "ON" : "OFF")
                 << " Inflate:" << (inflate ? "ON" : "OFF")
                 << " Zoom:" << std::fixed << std::setprecision(2) << camera.zoom
-                << " Polys:" << polygons.size();
+                << " Drawn:" << polygons_drawn << "/" << polygons.size();
         DrawText(toggles.str().c_str(), 10, 30, 14, DARKGRAY);
 
         // Draw edge count if edges visible

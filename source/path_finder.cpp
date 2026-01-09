@@ -136,6 +136,9 @@ namespace NavMesh {
 
 	void PathFinder::AddPolygons(const std::vector<Polygon>& polygons_to_add, float inflate_by = 0)
 	{
+		// Invalidate path cache - graph is being rebuilt
+		path_cache_valid_ = false;
+
 		polygons_.clear();
 		polygon_aabbs_.clear();
 		v_.clear();
@@ -474,6 +477,9 @@ namespace NavMesh {
 			if (same) return;  // No change, skip expensive recomputation
 		}
 
+		// Invalidate path cache - graph is being modified
+		path_cache_valid_ = false;
+
 		// Remove old points
 		for (const auto& p : ext_points_) {
 			auto it = vertex_ids_.find(p.Snap());
@@ -606,50 +612,84 @@ namespace NavMesh {
 
 	std::vector<Point> PathFinder::GetPath(const Point& start_coord, const Point& dest_coord)
 	{
+		// OPTIMIZATION: Return cached path if source/dest unchanged
+		if (path_cache_valid_ &&
+			start_coord.Snap() == cached_path_start_.Snap() &&
+			dest_coord.Snap() == cached_path_dest_.Snap()) {
+			return cached_path_;
+		}
+
 		int start = GetVertex(start_coord);
 		int dest = GetVertex(dest_coord);
 
-		if (start == dest) return { start_coord };
+		if (start == dest) {
+			cached_path_ = { start_coord };
+			cached_path_start_ = start_coord;
+			cached_path_dest_ = dest_coord;
+			path_cache_valid_ = true;
+			return cached_path_;
+		}
 
-		// Run A*.
-		std::vector<int> prev(v_.size(), -1);
-		std::vector<double> dist(v_.size(), -1.0);
-		std::vector<double> est(v_.size(), -1.0);
-		std::vector<bool> done(v_.size(), false);
+		// OPTIMIZATION: Reuse vectors instead of allocating ~1.7MB per call
+		size_t n = v_.size();
+		if (astar_prev_.size() < n) {
+			astar_prev_.resize(n);
+			astar_dist_.resize(n);
+			astar_est_.resize(n);
+			astar_done_.resize(n);
+		}
+
+		// Reset vectors (faster than reallocating)
+		std::fill(astar_prev_.begin(), astar_prev_.begin() + n, -1);
+		std::fill(astar_dist_.begin(), astar_dist_.begin() + n, -1.0);
+		std::fill(astar_est_.begin(), astar_est_.begin() + n, -1.0);
+		std::fill(astar_done_.begin(), astar_done_.begin() + n, false);
+
 		std::priority_queue<std::pair<double, int>> queue;
 
-		dist[start] = 0;
-		est[start] = (v_[dest] - v_[start]).Len();
-		queue.push(std::make_pair(-est[start], start));
+		astar_dist_[start] = 0;
+		astar_est_[start] = (v_[dest] - v_[start]).Len();
+		queue.push(std::make_pair(-astar_est_[start], start));
 
 		while (!queue.empty()) {
 			int bst = queue.top().second;
 			queue.pop();
-			if (done[bst]) continue;
-			done[bst] = true;
+			if (astar_done_[bst]) continue;
+			astar_done_[bst] = true;
 			if (bst == dest) break;
 
 			for (const auto& e : edges_[bst]) {
-				if (dist[e.first] < 0 || dist[e.first] > dist[bst] + e.second) {
-					dist[e.first] = dist[bst] + e.second;
-					est[e.first] = dist[e.first] + (v_[dest] - v_[e.first]).Len();
-					queue.push(std::make_pair(-est[e.first], e.first));
-					prev[e.first] = bst;
+				if (astar_dist_[e.first] < 0 || astar_dist_[e.first] > astar_dist_[bst] + e.second) {
+					astar_dist_[e.first] = astar_dist_[bst] + e.second;
+					astar_est_[e.first] = astar_dist_[e.first] + (v_[dest] - v_[e.first]).Len();
+					queue.push(std::make_pair(-astar_est_[e.first], e.first));
+					astar_prev_[e.first] = bst;
 				}
 			}
 		}
 
-		if (prev[dest] == -1) return {};
+		if (astar_prev_[dest] == -1) {
+			cached_path_.clear();
+			cached_path_start_ = start_coord;
+			cached_path_dest_ = dest_coord;
+			path_cache_valid_ = true;
+			return cached_path_;
+		}
 
-		std::vector<Point> res;
+		cached_path_.clear();
 		int u = dest;
 		while (u != start) {
-			res.push_back(v_[u]);
-			u = prev[u];
+			cached_path_.push_back(v_[u]);
+			u = astar_prev_[u];
 		}
-		res.push_back(v_[start]);
-		std::reverse(res.begin(), res.end());
-		return res;
+		cached_path_.push_back(v_[start]);
+		std::reverse(cached_path_.begin(), cached_path_.end());
+
+		cached_path_start_ = start_coord;
+		cached_path_dest_ = dest_coord;
+		path_cache_valid_ = true;
+
+		return cached_path_;
 	}
 
 	std::vector<Segment> PathFinder::GetEdgesForDebug() const

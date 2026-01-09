@@ -75,6 +75,18 @@ namespace NavMesh {
 		// Reusable buffer for spatial queries (avoid repeated allocations)
 		mutable std::vector<int> query_buffer_;
 
+		// Path caching - avoid recomputing path when source/dest unchanged
+		mutable std::vector<Point> cached_path_;
+		mutable Point cached_path_start_;
+		mutable Point cached_path_dest_;
+		mutable bool path_cache_valid_ = false;
+
+		// Reusable A* vectors (avoid ~1.7MB allocation per GetPath call)
+		mutable std::vector<int> astar_prev_;
+		mutable std::vector<double> astar_dist_;
+		mutable std::vector<double> astar_est_;
+		mutable std::vector<bool> astar_done_;
+
 		// Single mutex for all graph modifications (v_, edges_, vertex_ids_, free_vertices_)
 		std::mutex graph_mutex_;
 
