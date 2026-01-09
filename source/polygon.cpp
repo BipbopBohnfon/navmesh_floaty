@@ -11,8 +11,6 @@ namespace NavMesh {
 
 	Polygon::Polygon(Polygon&& other) :
 		points_(std::move(other.points_)),
-		bbox_(other.bbox_),
-		bbox_valid_(other.bbox_valid_),
 		xs_(std::move(other.xs_)),
 		top_lines_(std::move(other.top_lines_)),
 		bottom_lines_(std::move(other.bottom_lines_))
@@ -23,8 +21,6 @@ namespace NavMesh {
 	Polygon& Polygon::operator=(Polygon&& other)
 	{
 		points_ = std::move(other.points_);
-		bbox_ = other.bbox_;
-		bbox_valid_ = other.bbox_valid_;
 		xs_ = std::move(other.xs_);
 		top_lines_ = std::move(other.top_lines_);
 		bottom_lines_ = std::move(other.bottom_lines_);
@@ -33,8 +29,6 @@ namespace NavMesh {
 
 	Polygon& Polygon::operator=(const Polygon& other) {
 		points_ = other.points_;
-		bbox_ = other.bbox_;
-		bbox_valid_ = other.bbox_valid_;
 		xs_ = other.xs_;
 		top_lines_ = other.top_lines_;
 		bottom_lines_ = other.bottom_lines_;
@@ -48,7 +42,7 @@ namespace NavMesh {
 	{
 		if (points_.size() <= 2) {
 			points_.push_back(a);
-			InvalidateCaches();
+			xs_.clear();
 			OrderCounterClockwiseAndRemoveCollinearPoints();
 			return;
 		}
@@ -63,7 +57,7 @@ namespace NavMesh {
 			FloatSign(new_side1 ^ new_side2) > 0 &&
 			FloatSign(new_side2 ^ next_side) > 0) {
 			points_.push_back(a);
-			InvalidateCaches();
+			xs_.clear();
 			return;
 		}
 
@@ -115,7 +109,7 @@ namespace NavMesh {
 		}
 		points_[insert_to + 1] = a;
 
-		InvalidateCaches();
+		xs_.clear();
 	}
 
 	void Polygon::AddPoint(float x, float y)
@@ -160,11 +154,6 @@ namespace NavMesh {
 
 	bool Polygon::Intersects(const Segment& s, const std::pair<int, int>& tangents) const
 	{
-		// Early rejection: check if segment's bounding box intersects polygon's bbox.
-		if (!GetBoundingBox().IntersectsSegment(s.b, s.e)) {
-			return false;
-		}
-
 		// No tangents means that s.b lies inside of the polygon.
 		// But it's already guaranteed by PathFinder that no endpoint of |s|
 		// is inside, so this check can be skipped:
@@ -204,55 +193,10 @@ namespace NavMesh {
 		return FloatSign(chord_dir) > 0 && FloatSign(l_dir) < 0 && FloatSign(r_dir) < 0;
 	}
 
-	bool Polygon::IntersectsNaive(const Segment& s) const
-	{
-		// Early rejection: check if segment's bounding box intersects polygon's bbox.
-		if (!GetBoundingBox().IntersectsSegment(s.b, s.e)) {
-			return false;
-		}
-
-		// Check intersection against each polygon edge.
-		const int n = static_cast<int>(points_.size());
-		for (int i = 0; i < n; ++i) {
-			const Point& p1 = points_[i];
-			const Point& p2 = points_[(i + 1) % n];
-			if (s.Intersects(p1, p2)) {
-				return true;
-			}
-		}
-		return false;
-	}
-
 	void Polygon::Clear()
 	{
 		points_.clear();
-		InvalidateCaches();
-	}
-
-	const AABB& Polygon::GetBoundingBox() const
-	{
-		if (!bbox_valid_) {
-			ComputeBoundingBox();
-		}
-		return bbox_;
-	}
-
-	void Polygon::ComputeBoundingBox() const
-	{
-		bbox_ = AABB();  // Reset to default (max/lowest values)
-		for (const auto& p : points_) {
-			if (p.x < bbox_.min_x) bbox_.min_x = p.x;
-			if (p.x > bbox_.max_x) bbox_.max_x = p.x;
-			if (p.y < bbox_.min_y) bbox_.min_y = p.y;
-			if (p.y > bbox_.max_y) bbox_.max_y = p.y;
-		}
-		bbox_valid_ = true;
-	}
-
-	void Polygon::InvalidateCaches()
-	{
 		xs_.clear();
-		bbox_valid_ = false;
 	}
 
 	const Point& Polygon::operator[](size_t i) const
@@ -271,20 +215,22 @@ namespace NavMesh {
 
 		if (points_.empty()) return res;
 
-		const float diameter = 2 * r;
+		// Handle degenerate case: single point becomes a square
+		if (points_.size() == 1) {
+			res.points_.push_back(Point(points_[0].x - r, points_[0].y - r));
+			res.points_.push_back(Point(points_[0].x + r, points_[0].y - r));
+			res.points_.push_back(Point(points_[0].x + r, points_[0].y + r));
+			res.points_.push_back(Point(points_[0].x - r, points_[0].y + r));
+			return res;
+		}
 
-		// Sides of a 2*r x 2*r square for Minkowski sum.
-		const Point inflation_sides[kInflationSquareSides] = {
-			{diameter, 0.0f},
-			{0.0f, diameter},
-			{-diameter, 0.0f},
-			{0.0f, -diameter}
-		};
+		// Sides of a 2*r x 2*r square.
+		Point inflation_sides[4] = { {2*r, 0.0f}, {0.0f, 2*r}, {-2*r, 0.0f}, {0.0f, -2*r} };
 
-		// Find leftmost bottom corner as starting point.
+		// Find leftmost bottom corner.
 		int start = 0;
 		for (size_t i = 0; i < points_.size(); ++i) {
-			if (points_[i] < points_[start]) start = static_cast<int>(i);
+			if (points_[i] < points_[start]) start = (int)i;
 		}
 
 		// Apply either sides of the polygon or of the square: whichever comes first in CCW order.
@@ -292,34 +238,32 @@ namespace NavMesh {
 		int cur_point_id = start;
 		Point cur_point = points_[start] + Point(-r, -r);
 
-		const int max_iterations = static_cast<int>(points_.size()) * kInflationSquareSides * 2 + kMaxInflationIterations;
+		// Safety counter: theoretical max is n + 4, use n * 2 + 8 for safety
+		int max_iterations = (int)points_.size() * 2 + 8;
 		int iterations = 0;
 
 		do {
 			res.points_.push_back(cur_point);
-			const int next = (cur_point_id + 1) % static_cast<int>(points_.size());
-			const Point side = points_[next] - points_[cur_point_id];
-			const float dir = side ^ inflation_sides[cur_inflation];
-			const int dir_sign = FloatSign(dir);
+			int next = (cur_point_id + 1) % (int)points_.size();
+			Point side = points_[next] - points_[cur_point_id];
+			float dir = side ^ inflation_sides[cur_inflation];
 
-			if (dir_sign > 0) {
-				// Polygon side comes first in CCW order.
+			if (FloatSign(dir) > 0) {
 				cur_point = cur_point + side;
 				cur_point_id = next;
 			}
-			else if (dir_sign < 0) {
-				// Inflation square side comes first.
+			else if (FloatSign(dir) < 0) {
 				cur_point = cur_point + inflation_sides[cur_inflation];
-				cur_inflation = (cur_inflation + 1) % kInflationSquareSides;
+				cur_inflation = (cur_inflation + 1) % 4;
 			}
 			else {
-				// Collinear: combine both sides.
+				// Collinear case: advance both to avoid getting stuck
 				cur_point = cur_point + side + inflation_sides[cur_inflation];
-				cur_inflation = (cur_inflation + 1) % kInflationSquareSides;
+				cur_inflation = (cur_inflation + 1) % 4;
 				cur_point_id = next;
 			}
 
-			++iterations;
+			iterations++;
 			if (iterations > max_iterations) break;
 
 		} while (cur_inflation != 0 || cur_point_id != start);

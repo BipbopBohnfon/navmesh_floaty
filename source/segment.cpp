@@ -1,4 +1,5 @@
 #include "segment.h"
+#include "pointf.h"
 
 namespace NavMesh {
 
@@ -41,7 +42,7 @@ namespace NavMesh {
 		return Point(tmp.x / k, tmp.y / k);
 	}
 
-	bool Segment::operator==(const Segment& other) const
+	bool Segment::operator==(const Segment& other)
 	{
 		return (b == other.b && e == other.e) ||
 			(b == other.e && e == other.b);

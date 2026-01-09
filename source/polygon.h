@@ -1,45 +1,10 @@
 #pragma once
-
-#include <vector>
-#include <utility>
-#include <limits>
+#include "vector"
 
 #include "point.h"
 #include "segment.h"
 
 namespace NavMesh {
-
-	// Axis-aligned bounding box.
-	struct AABB {
-		float min_x = std::numeric_limits<float>::max();
-		float max_x = std::numeric_limits<float>::lowest();
-		float min_y = std::numeric_limits<float>::max();
-		float max_y = std::numeric_limits<float>::lowest();
-
-		// Check if point is within the bounding box (with epsilon tolerance).
-		bool Contains(const Point& p) const {
-			return p.x >= min_x - EPSILON && p.x <= max_x + EPSILON &&
-			       p.y >= min_y - EPSILON && p.y <= max_y + EPSILON;
-		}
-
-		// Check if two bounding boxes overlap.
-		bool Intersects(const AABB& other) const {
-			return !(max_x < other.min_x || other.max_x < min_x ||
-			         max_y < other.min_y || other.max_y < min_y);
-		}
-
-		// Check if a segment potentially intersects this bounding box.
-		bool IntersectsSegment(const Point& p1, const Point& p2) const {
-			// Fast AABB vs segment test using separating axis
-			float seg_min_x = std::min(p1.x, p2.x);
-			float seg_max_x = std::max(p1.x, p2.x);
-			float seg_min_y = std::min(p1.y, p2.y);
-			float seg_max_y = std::max(p1.y, p2.y);
-
-			return !(seg_max_x < min_x || seg_min_x > max_x ||
-			         seg_max_y < min_y || seg_min_y > max_y);
-		}
-	};
 
 	class Polygon
 	{
@@ -63,10 +28,6 @@ namespace NavMesh {
 		// or lies on the side.
 		bool IsInside(const Point& a) const;
 
-		// Returns the axis-aligned bounding box of the polygon.
-		// Computed lazily and cached.
-		const AABB& GetBoundingBox() const;
-
 		// Number of points in the polygon.
 		int Size() const;
 
@@ -81,11 +42,6 @@ namespace NavMesh {
 		// cross a vertex without intersection.
 		// This is to allow paths to pass between touching polygons.
 		bool Intersects(const Segment& s, const std::pair<int, int>& tangents) const;
-
-		// Checks if |s| intersects any side of this polygon.
-		// Does not require pre-computed tangents (O(k) where k is vertex count).
-		// Uses bounding box for early rejection.
-		bool IntersectsNaive(const Segment& s) const;
 
 		// Removes all points.
 		void Clear();
@@ -123,50 +79,26 @@ namespace NavMesh {
 	private:
 		friend class PathFinder;
 
-		// Minimum polygon size to use O(log n) tangent algorithm instead of O(n) naive.
-		static constexpr int kMinPointsForLogTangentsAlgo = 4;
-
-		// Maximum iterations for inflation loop (safety bound).
-		static constexpr int kMaxInflationIterations = 1000;
-
-		// Number of sides in the inflation square (Minkowski sum).
-		static constexpr int kInflationSquareSides = 4;
-
-		// Line equation coefficients: (a, b) for ax + by + c = 0.
-		// b is always positive for consistent orientation.
-		using LineCoefficients = std::pair<float, float>;
-
-		// Full line equation: ((a, b), c) for ax + by + c = 0.
-		using LineEquation = std::pair<LineCoefficients, float>;
+		static const int kMinPointsForLogTangentsAlgo = 4;
 
 		// Points of the polygon.
 		// Always in counter-clockwise order.
 		std::vector<Point> points_;
-
-		// Cached axis-aligned bounding box.
-		mutable AABB bbox_;
-		mutable bool bbox_valid_ = false;
-
-		// Computes and caches the bounding box.
-		void ComputeBoundingBox() const;
-
-		// Invalidates cached data when polygon changes.
-		void InvalidateCaches();
 
 		// Precalculates data-structures for O(log |p|) IsInside
 		// algorithm.
 		// If called, would require O(|p|) additional memory.
 		void PrepareForFastInsideQueries() const;
 
+
 		void OrderCounterClockwiseAndRemoveCollinearPoints();
 
 		// All points x coordinates sorted. Used for fast IsInside algorithm.
 		mutable std::vector<float> xs_;
-
-		// Line equations for top and bottom boundaries at each vertical segment.
-		// i-th entry corresponds to lines between xs_[i] and xs_[i+1].
-		mutable std::vector<LineEquation> top_lines_;
-		mutable std::vector<LineEquation> bottom_lines_;
+		// Coefficients for top and bottom a*x+b*y+c == 0 lines for each vertical segment.
+		// |b| is always positive.
+		// i-th entry corresponds for lines between x[i]..x[i+1];
+		mutable std::vector<std::pair<std::pair<float, float>, float>> top_lines_, bottom_lines_;
 
 		std::pair<int, int> GetTangentIdsNaive(const Point& a) const;
 		std::pair<int, int> GetTangentIdsLogarithmic(const Point& a) const;

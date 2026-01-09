@@ -42,7 +42,7 @@ namespace NavMesh {
 
 	bool Point::operator<(const Point& other) const
 	{
-		if (!FloatEqual(x, other.x)) return x < other.x;
+		if (x != other.x) return x < other.x;
 		return y < other.y;
 	}
 
@@ -54,6 +54,14 @@ namespace NavMesh {
 	float Point::Len2() const
 	{
 		return x * x + y * y;
+	}
+
+	Point Point::Snap() const
+	{
+		return Point(
+			std::round(x * SNAP_PRECISION) / SNAP_PRECISION,
+			std::round(y * SNAP_PRECISION) / SNAP_PRECISION
+		);
 	}
 
 }

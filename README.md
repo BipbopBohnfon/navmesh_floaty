@@ -15,89 +15,19 @@ everything in 7-8ms on a i7-6700k CPU. It doesn't require baking in the graph ar
 You need to include ``path_finder.h``, ``point.h``, ``segment.h``, ``polygon.h`` files in your project and link against the static library.
 Alternatively, since it's a small project, you can just add all files from ``source/`` to your project.
 
-### Core Classes
+The main class is ``NavMesh::PathFinder``. There are also ``NavMesh::Point``, ``NavMesh::Segment`` and ``NavMesh::Polygon`` for geometric logic.
 
-The main class is ``NavMesh::PathFinder``. Supporting classes include:
-- ``NavMesh::Point`` - 2D point/vector with arithmetic operations
-- ``NavMesh::Segment`` - Line segment with intersection testing
-- ``NavMesh::Polygon`` - Convex polygon with tangent and containment queries
+``PathFinder::AddPolygons`` should be called each time the map changes.
+This is the slowest one, which takes ``O(n^3*k)`` time, where ``n``in the number of polygons, and ``k`` is average number of points in each.
+This method consumes ``O(n^2*k)`` memory in the worst case (usually much less, as most of the edges are not valid due to intersections).
+Ideally, it should be called only if the map is updated.
 
-### Type Aliases
+``PathFinder::AddExternalPoints`` should be called after ``AddPolygons`` each time coordinates of external points change.
+This method takes ``O(p*n^2)`` time and consumes ``O(n*p)`` memory, where ``p`` is the number of points added.
 
-The library provides type aliases for common data structures:
-- ``NavMesh::TangentPair`` - Pair of tangent vertex indices ``(left_id, right_id)``
-- ``NavMesh::GraphEdge`` - Graph edge as ``(destination_vertex_id, distance)``
+``PathFinder::FindPath`` should be called each time you need a path between two points. The points must be one of the external points.
+This method takes ``O((n*k+p)*n*log(n*k+p))`` time and uses ``O((n+p)*n)`` memory.
 
-### API Reference
-
-#### PathFinder::AddPolygons
-```cpp
-void AddPolygons(const std::vector<Polygon>& polygons_to_add, float inflate_by);
-```
-Call each time the map changes. Builds the visibility graph from obstacle polygons.
-- ``polygons_to_add`` - Convex polygons representing obstacles
-- ``inflate_by`` - Minimum clearance distance from obstacles (set to actor radius)
-
-**Complexity:** ``O(n^3*k)`` time, ``O(n^2*k)`` memory worst case, where ``n`` is the number of polygons and ``k`` is average vertices per polygon.
-
-#### PathFinder::AddExternalPoints
-```cpp
-void AddExternalPoints(const std::vector<Point>& points);
-```
-Call after ``AddPolygons`` when start/destination points change. Connects external points to the visibility graph.
-- ``points`` - Query points (start positions, destinations)
-
-**Complexity:** ``O(p*n^2)`` time, ``O(n*p)`` memory, where ``p`` is the number of points.
-
-#### PathFinder::GetPath
-```cpp
-std::vector<Point> GetPath(const Point& start_coord, const Point& dest_coord);
-```
-Finds the shortest path between two points using A* search. Points must have been added via ``AddExternalPoints``.
-- Returns: Ordered vector of waypoints from start to destination, or empty vector if no path exists.
-
-**Complexity:** ``O((n*k+p)*log(n*k+p))`` time, ``O(n*k+p)`` memory.
-
-#### PathFinder::GetEdgesForDebug
-```cpp
-std::vector<Segment> GetEdgesForDebug() const;
-```
-Returns all edges in the visibility graph for debugging/visualization.
-
-### Example
-
-```cpp
-#include "path_finder.h"
-#include "polygon.h"
-#include "point.h"
-
-using namespace NavMesh;
-
-int main() {
-    // Create an obstacle polygon
-    Polygon obstacle;
-    obstacle.AddPoint(100.0f, 100.0f);
-    obstacle.AddPoint(200.0f, 100.0f);
-    obstacle.AddPoint(200.0f, 200.0f);
-    obstacle.AddPoint(100.0f, 200.0f);
-
-    // Initialize pathfinder with obstacles
-    PathFinder pathfinder;
-    pathfinder.AddPolygons({obstacle}, 10.0f);  // 10 unit clearance
-
-    // Add start and destination points
-    Point start(50.0f, 150.0f);
-    Point destination(250.0f, 150.0f);
-    pathfinder.AddExternalPoints({start, destination});
-
-    // Find path
-    std::vector<Point> path = pathfinder.GetPath(start, destination);
-
-    // path now contains waypoints from start to destination
-    // avoiding the obstacle with 10 unit clearance
-    return 0;
-}
-```
 
 ## Details
 
@@ -106,65 +36,47 @@ Then it uses A* on the constructed graph to find the shortest path. This impleme
 The path finding on the graph take negligibly small amout of time - most computations are spent on constructing the graph.
 Already computed tangents are reused to check for intersections of potential edges and obstacles in O(1). A fast logarithmic method is used for checking if points are inside an obstacle and for tangents construction.
 
-## Code Structure
-
-```
-source/          - Core library
-  point.h/cpp    - 2D point/vector with dot product, cross product, length
-  segment.h/cpp  - Line segment with asymmetric intersection testing
-  polygon.h/cpp  - Convex polygon with tangent queries, inflation, containment
-  path_finder.h/cpp - Visibility graph construction and A* pathfinding
-  cone_of_vision.h/cpp - Line-of-sight/field-of-view calculations
-  pointf.h       - Float comparison utilities (EPSILON, FloatEqual, FloatSign)
-
-tests/           - Google Test unit tests
-demo/            - Interactive demo application (raylib-based)
-```
-
-### Key Internal Types
-
-The ``PathFinder`` class uses these internal data structures:
-- ``vertices_`` - Vertex positions indexed by ID
-- ``adjacency_list_`` - Graph edges as ``vector<vector<GraphEdge>>``
-- ``point_to_vertex_id_`` - Maps coordinates to vertex IDs
-- ``polygon_vertex_is_occluded_`` - Tracks vertices inside other polygons
+## Code structure
+``source/`` directory contains the library, ``tests/`` directory contains tests and ``demo/`` directory contains a simple Windows demo application.
+``point.cpp``, ``segment.cpp``, and ``polygon.cpp`` contain geometry primitives with necessary logic implemented on them.
+``path_finder.cpp`` contains the main class, which invokes geometry calculations, constructs the graph and uses A* to find the path between two given points.
 
 ## Demo
+A demo is a simple windows GUI application. It uses GDI+ to draw obstacles and the path around them, as well as outputting some statistics.
+The user interaction is mostly happening through the menu. Following items are available:
 
-The demo is a cross-platform GUI application using raylib for rendering. It visualizes obstacles, the visibility graph, and computed paths.
+* Polygon
+  * Add - click on the screen to add the point to the new polygon. Right click to add the polygon to the map.
+  if you right click with empty current polygon you will exit the adding mode.
+  * Delete - click inside the polygon you would like to delete. Right click to exit the mode.
+* Move
+  * Source - move mouse around to move the source point. Click to fix the source.
+  * Destination - move mouse around to move the Destination point. Click to fix the source.
+* Debug
+  * Generate grid - will put on the map a grid of squares.
+  * Generate polygons - will randomly generate 100 polygons on the map.
+  * Generate circles - will randomly generate 100 circles on the map (more detailed obstacles).
+  * Inflate polygons - toggles if the path should walk around the polygons or can stick to them. Inflation will double the amount of points, slowing the calculations down.
+  * Show edges - toggle if the edges of the graph are shown.
+  * Benchmark - Generate polygons and find path non-stop 200 times and output the average time spent.
 
-Run the demo after building:
-```bash
-./build/demo/demo
-```
-
-The demo displays:
-- Obstacle polygons (filled shapes)
-- Visibility graph edges (optional, for debugging)
-- Computed path from source to destination
-- Performance timing information
+You can also drag the source or the destination circles (if no action is selected). Current action is always shown at the top of the window. 
+The upper left corner shows how much time all path related calulations took and how much geometrical calculations took specifically. There's also the result of the last benchmark.
+Drawing is not included in any measurements and is quite slow, especially if you choose to draw edges.
 
 ## Building
 
-### CMake (Cross-platform)
+The repository has Visual Studio 2019 project files necessary to build it in ``build_vs/`` directory.
+Simply open NavMesh.sln in the Visual Studio 2019 or later. ``source`` project builds a static library, ``demo`` builds a demo and ``tests`` runs tests.
 
-```bash
-# Configure
-cmake -B build
-
-# Build
-cmake --build build
-
-# Run tests
-./build/tests/tests
-
-# Run demo
-./build/demo/demo
+On other platforms you can execute:
+```
+mkdir build
+cd build
+cmake ..
 ```
 
-Dependencies (fetched automatically via CMake FetchContent):
-- raylib (demo rendering)
-- Google Test (unit tests)
+Then either run ``make`` or use other platform specific build tool.
 
 ## Further work
 
