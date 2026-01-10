@@ -76,6 +76,16 @@ namespace NavMesh {
 		// if seen from |a|.
 		bool IsTangent(int i, const Point& a) const;
 
+		// Returns the nearest point on the polygon boundary from point |a|.
+		// Useful for finding escape routes when a point is inside the polygon.
+		// Also returns the index of the edge (edge i goes from vertex i to vertex (i+1) % Size()).
+		struct BoundaryResult {
+			Point nearest_point;
+			int edge_index;
+			float distance;
+		};
+		BoundaryResult GetNearestBoundaryPoint(const Point& a) const;
+
 	private:
 		friend class PathFinder;
 

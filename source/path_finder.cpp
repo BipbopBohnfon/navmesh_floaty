@@ -506,6 +506,7 @@ namespace NavMesh {
 		ext_points_ = points_;
 
 		std::vector<bool> point_is_inside(points_.size(), false);
+		std::vector<int> containing_polygon(points_.size(), -1);  // Which polygon contains each inside point
 
 		// Check if external points are inside any polygon (uses spatial optimization)
 		for (size_t i = 0; i < points_.size(); ++i) {
@@ -514,6 +515,7 @@ namespace NavMesh {
 				for (int j : query_buffer_) {
 					if (polygons_[j].IsInside(points_[i])) {
 						point_is_inside[i] = true;
+						containing_polygon[i] = j;
 						break;
 					}
 				}
@@ -521,9 +523,46 @@ namespace NavMesh {
 				for (size_t j = 0; j < polygons_.size(); ++j) {
 					if (polygons_[j].IsInside(points_[i])) {
 						point_is_inside[i] = true;
+						containing_polygon[i] = static_cast<int>(j);
 						break;
 					}
 				}
+			}
+		}
+
+		// Handle inside points: create escape edges to nearest boundary
+		for (size_t i = 0; i < points_.size(); ++i) {
+			if (!point_is_inside[i]) continue;
+
+			int poly_idx = containing_polygon[i];
+			if (poly_idx < 0) continue;
+
+			const auto& poly = polygons_[poly_idx];
+			auto boundary_result = poly.GetNearestBoundaryPoint(points_[i]);
+
+			if (boundary_result.edge_index < 0) continue;
+
+			// Create vertex for the escape point (on the polygon boundary)
+			Point escape_point = boundary_result.nearest_point;
+			int inside_vertex = GetVertex(points_[i]);
+			int escape_vertex = GetVertex(escape_point);
+
+			// Add direct edge from inside point to escape point (no obstacle check needed)
+			AddEdge(inside_vertex, escape_vertex);
+
+			// The escape point is on edge between vertex edge_index and (edge_index+1) % size
+			// Connect it to both endpoints of that edge (they're already in the graph)
+			int v1_idx = boundary_result.edge_index;
+			int v2_idx = (boundary_result.edge_index + 1) % poly.Size();
+			const Point& v1 = poly[v1_idx];
+			const Point& v2 = poly[v2_idx];
+
+			// Only connect to vertices that are not inside other polygons
+			if (!polygon_point_is_inside_[poly_idx][v1_idx]) {
+				AddEdge(escape_vertex, GetVertex(v1));
+			}
+			if (!polygon_point_is_inside_[poly_idx][v2_idx]) {
+				AddEdge(escape_vertex, GetVertex(v2));
 			}
 		}
 

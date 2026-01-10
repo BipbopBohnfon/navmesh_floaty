@@ -1,6 +1,7 @@
 #include "polygon.h"
 
 #include <algorithm>
+#include <limits>
 
 namespace NavMesh {
 
@@ -686,6 +687,56 @@ namespace NavMesh {
 			(FloatSign(dir1) < 0 && FloatSign(dir2) <= 0) ||
 			((FloatZero(dir2) && v.Len2() < v2.Len2()) ^
 				(FloatZero(dir1) && v.Len2() < v1.Len2()));
+	}
+
+	Polygon::BoundaryResult Polygon::GetNearestBoundaryPoint(const Point& a) const
+	{
+		BoundaryResult result;
+		result.nearest_point = Point(0, 0);
+		result.edge_index = -1;
+		result.distance = std::numeric_limits<float>::max();
+
+		if (points_.empty()) {
+			return result;
+		}
+
+		int n = static_cast<int>(points_.size());
+		for (int i = 0; i < n; ++i) {
+			const Point& p1 = points_[i];
+			const Point& p2 = points_[(i + 1) % n];
+
+			// Find nearest point on segment p1-p2 from point a
+			Point edge = p2 - p1;
+			float edge_len2 = edge.Len2();
+
+			Point nearest;
+			if (edge_len2 < EPSILON) {
+				// Degenerate edge (p1 == p2)
+				nearest = p1;
+			} else {
+				// Project a onto the line defined by the edge
+				// t = ((a - p1) . edge) / |edge|^2
+				float t = ((a - p1) * edge) / edge_len2;
+
+				// Clamp t to [0, 1] to stay within the segment
+				if (t <= 0.0f) {
+					nearest = p1;
+				} else if (t >= 1.0f) {
+					nearest = p2;
+				} else {
+					nearest = p1 + edge * t;
+				}
+			}
+
+			float dist = (a - nearest).Len();
+			if (dist < result.distance) {
+				result.distance = dist;
+				result.nearest_point = nearest;
+				result.edge_index = i;
+			}
+		}
+
+		return result;
 	}
 
 }
